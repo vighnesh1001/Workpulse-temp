@@ -1,0 +1,426 @@
+:root{--max-width:760px;--accent:#2b6cb0}
+body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f7fafc;color:#222}
+.container{max-width:var(--max-width);margin:28px auto;padding:0 16px}
+.nav{background:white;border-bottom:1px solid #e6eef6}
+.nav .container{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.brand{font-weight:700;color:var(--accent);text-decoration:none}
+.nav-right a{margin-left:12px;text-decoration:none;color:#4a5568}
+.auth-card{background:white;padding:24px;border-radius:8px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-top:28px}
+.auth-card h2{margin-top:0}
+.form-row{margin-bottom:12px}
+.form-row input{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px}
+.btn{padding:10px 14px;border:none;border-radius:6px;background:var(--accent);color:white;cursor:pointer}
+.field-error{color:#b91c1c;font-size:0.9rem;margin-top:6px}
+.flashes{list-style:none;padding:0;margin:8px 0}
+.flash{padding:8px;border-radius:6px;margin-bottom:8px}
+.flash.success{background:#ecfdf5;color:#065f46}
+.flash.danger{background:#fff1f2;color:#9f1239}
+.link-like{background:transparent;border:none;color:var(--accent);cursor:pointer}
+.password-row{display:flex;gap:8px;align-items:center}
+.muted{color:#718096}
+.card{background:white;padding:18px;border-radius:8px;margin-top:18px}
+
+/* ==== Group Chat Styles ==== */
+
+.group-chat-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.group-chat-card {
+  width: 100%;
+  max-width: 700px;
+}
+
+.chat-box {
+  max-height: 400px;
+  overflow-y: auto;
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.chat-message {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  max-width: 85%;
+  word-wrap: break-word;
+  transition: background 0.2s ease-in-out;
+}
+
+.chat-own {
+  background: #e6f4ea; /* light green bubble */
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.chat-other {
+  background: #ffffff;
+  border: 1px solid #edf2f7;
+  margin-right: auto;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-header strong {
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.chat-timestamp {
+  color: #718096;
+  font-size: 0.85rem;
+}
+
+.chat-body {
+  margin-top: 4px;
+  color: #2d3748;
+  line-height: 1.4;
+}
+
+.no-messages {
+  color: #718096;
+  text-align: center;
+  font-style: italic;
+  padding: 12px;
+}
+
+.chat-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  outline: none;
+}
+
+.chat-input:focus {
+  border-color: #3182ce;
+  box-shadow: 0 0 0 1px #3182ce33;
+}
+
+.send-btn {
+  background: #2b6cb0;
+  color: white;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+.send-btn:hover {
+  background: #2c5282;
+}
+
+.back-link {
+  text-align: right;
+  margin-top: 12px;
+}
+
+.back-link a {
+  color: #2b6cb0;
+  text-decoration: none;
+}
+
+.back-link a:hover {
+  text-decoration: underline;
+}
+
+#calendar {
+  margin-top: 20px;
+  width: 100%;
+}
+
+.fc-toolbar-title {
+  font-size: 1.6rem !important;
+  color: #2b6cb0 !important;
+}
+
+.fc-day-today {
+  background: #ebf8ff !important;
+}
+
+.fc-event {
+  border-radius: 6px !important;
+  padding: 2px 4px;
+  font-size: 0.9rem !important;
+}
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-dot.online {
+  background-color: #2ecc71; /* green */
+}
+
+.status-dot.offline {
+  background-color: #bdc3c7; /* grey */
+}
+
+.loader {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 5px solid #ccc;
+    border-top-color: #3498db;
+    animation: spin 0.8s linear infinite;
+}
+/* Light mode (default) */
+:root {
+    --bg-color: #ffffff;
+    --text-color: #111111;
+    --card-bg: #f5f5f5;
+    --nav-bg: #ffffff;
+    --border-color: #dddddd;
+}
+
+/* Dark mode override */
+.dark-mode {
+    --bg-color: #121212;
+    --text-color: #eaeaea;
+    --card-bg: #1c1c1c;
+    --nav-bg: #1a1a1a;
+    --border-color: #333333;
+}
+
+/* Apply theme */
+body {
+    background: var(--bg-color);
+    color: var(--text-color);
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.nav {
+    background: var(--nav-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+
+
+/* Animated Online Dot */
+.status-dot {
+    position: relative;
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+/* ONLINE — green + pulse */
+.status-dot.online {
+    background: #2ecc71;
+    box-shadow: 0 0 6px rgba(46,204,113,0.8);
+    animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* OFFLINE — static red */
+.status-dot.offline {
+    background: #e74c3c;
+    box-shadow: none;
+}
+
+/* Pulse animation */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 4px rgba(46,204,113,0.6);
+    }
+    50% {
+        transform: scale(1.25);
+        box-shadow: 0 0 10px rgba(46,204,113,1);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 4px rgba(46,204,113,0.6);
+    }
+}
+
+<style>
+#progress-ring {
+    transform: rotate(-90deg);
+}
+
+#ring-bg {
+    stroke: #ddd;
+    stroke-width: 10;
+    fill: none;
+}
+
+#ring {
+    stroke: #4CAF50;
+    stroke-width: 10;
+    stroke-linecap: round;
+    fill: none;
+    stroke-dasharray: 377;
+    stroke-dashoffset: 0;
+    transition: stroke 0.5s ease;
+}
+
+.last-five {
+    stroke: #ff5252 !important;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { filter: drop-shadow(0 0 2px #ff5252); }
+    50% { filter: drop-shadow(0 0 8px #ff5252); }
+    100% { filter: drop-shadow(0 0 2px #ff5252); }
+}
+
+#pomodoro-time-display {
+    margin-top: -95px;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    position: relative;
+}
+</style>
+
+<style>
+  #gantt_wrapper::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+  }
+  #gantt_wrapper::-webkit-scrollbar-thumb {
+      background: #b0bec5;
+      border-radius: 4px;
+  }
+</style>
+<style>
+  .kanban-container {
+    display: flex;
+    gap: 22px;
+    margin-top: 22px;
+  }
+
+  .kanban-column {
+    width: 32%;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    transition: 0.2s ease;
+  }
+
+  .kanban-column:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.06);
+  }
+
+  .kanban-column h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #374151;
+  }
+
+  .kanban-list {
+    min-height: 260px;
+    border-radius: 10px;
+    background: #f9fafb;
+    padding: 10px;
+    border: 1px dashed #d1d5db;
+    transition: background 0.3s;
+  }
+
+  .kanban-list.drag-over {
+    background: #eef2ff;
+    border-color: #6366f1;
+  }
+
+  .kanban-card {
+    background: #ffffff;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    cursor: grab;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .kanban-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+
+  .kanban-card strong {
+    color: #111827;
+    font-size: 14px;
+  }
+
+  .kanban-card small {
+    color: #6b7280;
+    font-size: 12px;
+  }
+
+.task-bar {
+    position: absolute;
+    height: 22px;
+    color: #000 ;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    color: #000 !important;           /* ← TEXT ALWAYS BLACK */
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    background: #d1d5db;   /* fallback light gray */
+}
+.in-progress-bar  { background: #1d4ed8 !important; }
+
+.todo-bar        { background: #4b5563 !important; }   /* dark gray */
+.in-progress-bar { background: #1d4ed8 !important; }   /* deep blue */
+.done-bar        { background: #059669 !important; }   /* deep green */
+.overdue-bar     { background: #b91c1c !important; }   /* deep red */
+.task-bar {
+    color: #000 !important;
+    font-weight: 600;
+}
+.gantt-gridline {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(0,0,0,0.08);
+    pointer-events: none;   /* ensure bars are clickable */
+}
+
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+

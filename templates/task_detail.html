@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="card">
+  <h2>{{ task.title }}</h2>
+  <p class="muted">{{ task.description or 'No description' }}</p>
+
+  <p><strong>Status:</strong> {{ task.status }}</p>
+  <p><strong>Created by:</strong> {{ task.creator.username }}</p>
+
+  {% if task.assigned_to %}
+    <p><strong>Assigned to:</strong> {{ task.assignee.username }}</p>
+  {% endif %}
+
+  {% if task.due_date %}
+    <p><strong>Due date:</strong> {{ task.due_date.strftime('%Y-%m-%d') }}</p>
+  {% else %}
+    <p><strong>Due date:</strong> Not set</p>
+  {% endif %}
+
+<p><strong>Priority:</strong> {{ task.priority.title() if task.priority else "Not set" }}</p>
+
+  {% if can_update %}
+  <hr>
+  <h3>Update Task</h3>
+
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="form-row">
+      {{ form.status.label }}
+      {{ form.status() }}
+    </div>
+
+    <div class="form-row">
+      {{ form.priority.label }}
+      {{ form.priority() }}
+    </div>
+
+    <div class="form-row">
+      {{ form.comment.label }}
+      {{ form.comment(size=64, placeholder='Write your update...') }}
+      {% for err in form.comment.errors %}
+        <div class="field-error">{{ err }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="form-row">
+      {{ form.submit(class_='btn') }}
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<div class="task-tags">
+  {% for tag in task.tags %}
+    <span class="badge badge-secondary">{{ tag.name }}</span>
+  {% endfor %}
+</div>
+
+
+
+<!-- ACTIVITY TIMELINE -->
+<div class="card" style="margin-top:20px;">
+  <h3>Activity Timeline</h3>
+
+  <ul style="list-style:none; padding-left:10px;">
+    {% for a in activities %}
+      <li style="margin-bottom:10px;">
+        <strong>{{ a.timestamp.strftime('%Y-%m-%d %H:%M') }}</strong><br>
+        <span>{{ a.message }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+
+
+<!-- POMODORO -->
+<div class="card" style="margin-top:20px;">
+  <h3>Pomodoro Focus Mode</h3>
+
+  <label for="pomodoro-minutes">Pomodoro Duration (minutes):</label>
+  <input id="pomodoro-minutes" type="number" min="1" max="240" value="25"
+         style="width:80px; margin-left:8px;">
+
+  <div id="pomodoro-box" style="margin-top:12px;">
+      {% if task.pomodoro_active %}
+          <div class="pomodoro-visual">
+              <svg class="ring" width="120" height="120">
+                  <circle class="ring-bg" cx="60" cy="60" r="54"></circle>
+                  <circle class="ring-progress" cx="60" cy="60" r="54"></circle>
+              </svg>
+              <div class="pomodoro-time" id="pomodoro-timer">--</div>
+          </div>
+          <button id="stop-pomodoro" class="btn btn-danger">Stop</button>
+      {% else %}
+          <button id="start-pomodoro" class="btn">Start Pomodoro</button>
+      {% endif %}
+  </div>
+</div>
+
+
+<!-- REMARKS -->
+<div class="card" style="margin-top:20px;">
+  <h3>Remarks</h3>
+
+  {% if remarks %}
+    <ul style="padding-left:16px;">
+      {% for remark in remarks %}
+        <li style="margin-bottom:10px;">
+          <strong>{{ remark.user.username }}</strong> —
+          <small>{{ remark.timestamp.strftime('%Y-%m-%d %H:%M') }}</small><br>
+          {{ remark.comment }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No remarks yet.</p>
+  {% endif %}
+</div>
+
+
+
+<!-- DEADLINE HEATMAP -->
+<div class="card" style="margin-top:20px;">
+  <h3>Deadline Heatmap</h3>
+  <p class="muted">Shows how many tasks are due each day this month.</p>
+
+  <div id="deadline-heatmap" style="margin-top:10px; display:flex; gap:6px;"></div>
+</div>
+
+<style>
+  .heatmap-column { display: flex; flex-direction: column; gap: 4px; }
+  .heatmap-day {
+      width: 18px; height: 18px; border-radius: 3px; cursor: pointer;
+      transition: transform 0.1s ease;
+  }
+  .heatmap-day:hover { transform: scale(1.2); }
+  .heatmap-tooltip {
+      position: absolute; background: #333; color: white;
+      font-size: 12px; padding: 4px 8px; border-radius: 4px;
+      display: none; pointer-events: none;
+  }
+  .muted { color: #666; }
+
+  /* Pomodoro visual styles */
+  .pomodoro-visual {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      margin: 15px auto;
+  }
+
+  .ring {
+      transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+      fill: none;
+      stroke: #e0e0e0;
+      stroke-width: 10;
+  }
+
+  .ring-progress {
+      fill: none;
+      stroke: #4caf50;
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-dasharray: 339.292;
+      stroke-dashoffset: 339.292;
+      transition: stroke 0.3s linear;
+  }
+
+  .pomodoro-time {
+      position: absolute;
+      top: 35px;
+      left: 0;
+      width: 120px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+  }
+</style>
+
+<div id="heatmap-tooltip" class="heatmap-tooltip"></div>
+
+
+
+<!-- ===========================
+     JAVASCRIPT (Pomodoro)
+=========================== -->
+<script>
+(function () {
+    window.addEventListener('load', () => {
+        const socketPomodoro = (typeof socket !== 'undefined') ? socket : io();
+
+        const taskId = Number({{ task.id }});
+        const groupId = Number({{ group.id }});
+
+        socketPomodoro.emit("join_room", { group_id: groupId });
+
+        let timerInterval = null;
+
+        function setProgress(percent) {
+            const circle = document.querySelector(".ring-progress");
+            if (!circle) return;
+
+            const radius = 54;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (percent / 100) * circumference;
+
+            circle.style.strokeDashoffset = offset;
+        }
+
+        function startTimer(endIso, totalMinutes) {
+            clearInterval(timerInterval);
+
+            timerInterval = setInterval(() => {
+                const now = new Date();
+                const diff = (new Date(endIso) - now) / 1000;
+                const tEl = document.getElementById("pomodoro-timer");
+                const ring = document.querySelector(".ring-progress");
+
+                if (!tEl || diff < 0) {
+                    clearInterval(timerInterval);
+                    tEl.innerText = "Done!";
+                    setProgress(100);
+                    return;
+                }
+
+                const mins = Math.floor(diff / 60);
+                const secs = Math.floor(diff % 60);
+                tEl.innerHTML = `${mins}:${String(secs).padStart(2,"0")}`;
+
+                const totalSec = totalMinutes * 60;
+                const percent = ((totalSec - diff) / totalSec) * 100;
+                setProgress(percent);
+
+                if (diff <= 300) {  // last 5 minutes
+                    ring.style.stroke = "#e53935"; 
+                }
+            }, 1000);
+        }
+
+        document.addEventListener("click", (ev) => {
+            const el = ev.target;
+
+            if (el.id === "start-pomodoro") {
+                const minutes = Number(document.getElementById("pomodoro-minutes").value) || 25;
+
+                const box = document.getElementById("pomodoro-box");
+                box.innerHTML = `
+                    <div class="pomodoro-visual">
+                        <svg class="ring" width="120" height="120">
+                            <circle class="ring-bg" cx="60" cy="60" r="54"></circle>
+                            <circle class="ring-progress" cx="60" cy="60" r="54"></circle>
+                        </svg>
+                        <div class="pomodoro-time" id="pomodoro-timer">--</div>
+                    </div>
+                    <button id="stop-pomodoro" class="btn btn-danger">Stop</button>
+                `;
+
+                socketPomodoro.emit("start_pomodoro", {
+                    task_id: taskId,
+                    group_id: groupId,
+                    minutes: minutes
+                });
+            }
+
+            if (el.id === "stop-pomodoro") {
+                socketPomodoro.emit("stop_pomodoro", {
+                    task_id: taskId,
+                    group_id: groupId
+                });
+
+                clearInterval(timerInterval);
+                const box = document.getElementById("pomodoro-box");
+                box.innerHTML = `<button id="start-pomodoro" class="btn">Start Pomodoro</button>`;
+            }
+        });
+
+        socketPomodoro.on("pomodoro_update", (data) => {
+            if (Number(data.task_id) !== taskId) return;
+
+            const box = document.getElementById("pomodoro-box");
+
+            if (data.status === "started") {
+                box.innerHTML = `
+                    <div class="pomodoro-visual">
+                        <svg class="ring" width="120" height="120">
+                            <circle class="ring-bg" cx="60" cy="60" r="54"></circle>
+                            <circle class="ring-progress" cx="60" cy="60" r="54"></circle>
+                        </svg>
+                        <div class="pomodoro-time" id="pomodoro-timer">--</div>
+                    </div>
+                    <button id="stop-pomodoro" class="btn btn-danger">Stop</button>
+                `;
+
+                startTimer(data.ends_at, data.minutes);
+                showToast(`${data.user} started a ${data.minutes}-minute Pomodoro`);
+            }
+
+            if (data.status === "stopped") {
+                clearInterval(timerInterval);
+                box.innerHTML = `<button id="start-pomodoro" class="btn">Start Pomodoro</button>`;
+                showToast(`${data.user} stopped the Pomodoro`);
+            }
+        });
+
+        socketPomodoro.on("disconnect", () => {
+            clearInterval(timerInterval);
+        });
+    });
+})();
+</script>
+
+
+
+<!-- ===========================
+     HEATMAP SCRIPT (unchanged)
+=========================== -->
+<script>
+async function loadDeadlineHeatmap() {
+    const resp = await fetch("/api/task-heatmap");
+    const data = await resp.json();
+
+    const container = document.getElementById("deadline-heatmap");
+    const tooltip = document.getElementById("heatmap-tooltip");
+    container.innerHTML = "";
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+
+    const last = new Date(year, month + 1, 0);
+    const days = last.getDate();
+
+    const columns = Array.from({ length: 7 }, () => []);
+
+    for (let d = 1; d <= days; d++) {
+        const date = new Date(year, month, d);
+        const dow = date.getDay();
+
+        const key = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        const count = data[key] || 0;
+
+        let color = "#e0e0e0";
+        if (count === 1) color = "#b2dfdb";
+        if (count === 2) color = "#4dd0e1";
+        if (count === 3) color = "#26c6da";
+        if (count >= 4) color = "#00acc1";
+
+        const box = document.createElement("div");
+        box.className = "heatmap-day";
+        box.style.background = color;
+
+        box.addEventListener("mouseenter", () => {
+            tooltip.style.display = "block";
+            tooltip.textContent = `${d} ${today.toLocaleString('default',{month:'short'})}: ${count} tasks due`;
+        });
+        box.addEventListener("mousemove", e => {
+            tooltip.style.left = e.pageX + 15 + "px";
+            tooltip.style.top = e.pageY + 15 + "px";
+        });
+        box.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+
+        columns[dow].push(box);
+    }
+
+    columns.forEach(col => {
+        const c = document.createElement("div");
+        c.className = "heatmap-column";
+        col.forEach(day => c.appendChild(day));
+        container.appendChild(c);
+    });
+}
+
+loadDeadlineHeatmap();
+</script>
+
+{% endblock %}

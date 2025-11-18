@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="auth-card">
+  <h2>Create Task for "{{ group.name }}"</h2>
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+
+    <div class="form-row">
+      {{ form.title.label }}
+      {{ form.title(size=40, placeholder='Task title') }}
+      {% for err in form.title.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+    </div>
+
+    <div class="form-row">
+      {{ form.description.label }}
+      {{ form.description(size=64, placeholder='Optional description') }}
+    </div>
+
+    <div class="form-row">
+  {{ form.due_date.label }}
+  {{ form.due_date(class_="input") }}
+</div>
+
+    <div class="form-row">
+      {{ form.assigned_to.label }}
+      {{ form.assigned_to() }}
+    </div>
+
+    <div class="form-group">
+    {{ form.priority.label }}
+    {{ form.priority(class="form-control") }}
+    </div>
+
+    <div class="form-row">
+      {{ form.submit(class_='btn') }}
+    </div>
+  </form>
+</div>
+{% endblock %}

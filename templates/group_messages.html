@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="group-chat-container">
+  <div class="card group-chat-card">
+    <h2>Group Chat: {{ group.name }}</h2>
+    <p class="muted">All members can send and view messages here.</p>
+
+    <!-- Chat messages -->
+    <div id="chat-box" class="chat-box">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="chat-message {% if msg.user_id == current_user.id %}chat-own{% else %}chat-other{% endif %}">
+            <div class="chat-header">
+              <strong>{{ msg.user.username }}</strong>
+              <small class="chat-timestamp">
+                {{ msg.timestamp.strftime('%Y-%m-%d %H:%M') if msg.timestamp else '' }}
+              </small>
+            </div>
+            <div class="chat-body">{{ msg.message }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="no-messages">No messages yet. Start the conversation!</p>
+      {% endif %}
+    </div>
+
+    <!-- Real-time Send Message -->
+    <div class="chat-form">
+      {{ form.hidden_tag() }}
+
+      <div class="form-row chat-input-row">
+        {{ form.message(id='chat-input', class_='chat-input', placeholder='Write a message...') }}
+      </div>
+
+      <div class="form-row">
+        <button type="button" id="send-btn" class="btn send-btn">Send</button>
+      </div>
+    </div>
+
+    <p class="back-link">
+      <a href="{{ url_for('group_detail', group_id=group.id) }}">← Back to Group</a>
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+  const socket = io();
+
+  // Join room
+  socket.emit("join_room", {
+    group_id: {{ group.id }}
+  });
+
+  // Send message
+  document.getElementById("send-btn").onclick = function () {
+    const input = document.getElementById("chat-input");
+    const text = input.value.trim();
+
+    if (text !== "") {
+      socket.emit("send_message", {
+        group_id: {{ group.id }},
+        message: text
+      });
+      input.value = "";
+    }
+  };
+
+  // ENTER key
+  document.getElementById("chat-input").addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      document.getElementById("send-btn").click();
+    }
+  });
+
+ <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+  const socket = io();
+
+  // Join this group's chat room
+  socket.emit("join_room", { group_id: {{ group.id }} });
+
+  // Send message
+  document.getElementById("send-btn").onclick = function () {
+      const input = document.getElementById("chat-input");
+      const text = input.value.trim();
+
+      if (text !== "") {
+          socket.emit("send_message", {
+              group_id: {{ group.id }},
+              message: text
+          });
+          input.value = "";
+      }
+  };
+
+  document.getElementById("chat-input").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+          event.preventDefault();
+          document.getElementById("send-btn").click();
+      }
+  });
+
+  // Receive chat message in real time
+  socket.on("receive_message", data => {
+      const chatBox = document.getElementById("chat-box");
+
+      let cssClass = data.user === "{{ current_user.username }}"
+          ? "chat-own"
+          : "chat-other";
+
+      chatBox.innerHTML += `
+        <div class="chat-message ${cssClass}">
+          <div class="chat-header">
+            <strong>${data.user}</strong>
+            <small class="chat-timestamp">${data.timestamp}</small>
+          </div>
+          <div class="chat-body">${data.message}</div>
+        </div>
+      `;
+
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      // Push notification only for messages from others
+      if (data.user !== "{{ current_user.username }}") {
+          const msg = `New message from ${data.user}: ${data.message}`;
+          showToast(msg);
+          if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("New chat message", { body: msg });
+          }
+      }
+  });
+
+  // initial scroll
+  const box = document.getElementById("chat-box");
+  box.scrollTop = box.scrollHeight;
+</script>
+
+
+{% endblock %}

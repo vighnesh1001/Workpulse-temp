@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h2>My Dashboard</h2>
+<p class="muted">Quick overview of everything assigned to you.</p>
+
+<!-- ================= TASK SECTIONS ================= -->
+
+<div class="card">
+    <h3>Tasks Assigned to Me</h3>
+
+    <h4>Pending</h4>
+    {% if pending %}
+        <ul>
+        {% for t in pending %}
+            <li><a href="{{ url_for('task_detail', group_id=t.group_id, task_id=t.id) }}">{{ t.title }}</a></li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No pending tasks 🎉</p>
+    {% endif %}
+
+    <h4>In Progress</h4>
+    {% if inprogress %}
+        <ul>
+        {% for t in inprogress %}
+            <li><a href="{{ url_for('task_detail', group_id=t.group_id, task_id=t.id) }}">{{ t.title }}</a></li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No active tasks.</p>
+    {% endif %}
+
+    <h4>Done</h4>
+    {% if done %}
+        <ul>
+        {% for t in done %}
+            <li>{{ t.title }}</li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No completed tasks yet.</p>
+    {% endif %}
+</div>
+
+
+<!-- ================= DUE THIS WEEK ================= -->
+<div class="card" style="margin-top:20px;">
+    <h3>Due This Week</h3>
+    {% if due_this_week %}
+        <ul>
+            {% for t in due_this_week %}
+            <li>
+                <a href="{{ url_for('task_detail', group_id=t.group_id, task_id=t.id) }}">{{ t.title }}</a>
+                — due {{ t.due_date }}
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No deadlines this week.</p>
+    {% endif %}
+</div>
+
+<!-- ================= OVERDUE ================= -->
+<div class="card" style="margin-top:20px;">
+    <h3 style="color:#c0392b;">Overdue</h3>
+    {% if overdue %}
+        <ul>
+            {% for t in overdue %}
+            <li>
+                <a href="{{ url_for('task_detail', group_id=t.group_id, task_id=t.id) }}">{{ t.title }}</a>
+                — due {{ t.due_date }}
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No overdue tasks 🎉</p>
+    {% endif %}
+</div>
+
+<!-- ================= RECENT MESSAGES ================= -->
+<div class="card" style="margin-top:20px;">
+    <h3>Recent Messages</h3>
+    {% if recent_messages %}
+        <ul>
+        {% for m in recent_messages %}
+            <li>
+                <strong>{{ m.user.username }}</strong> in <em>{{ m.group.name }}</em>:
+                {{ m.message }}
+                <small class="muted">({{ m.timestamp }})</small>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No recent messages.</p>
+    {% endif %}
+</div>
+
+<!-- ================= WORKLOAD CHART ================= -->
+<div class="card" style="margin-top:20px;">
+    <h3>My Workload</h3>
+    <div id="user_workload_chart" style="height:300px;"></div>
+</div>
+
+<script src="https://www.gstatic.com/charts/loader.js"></script>
+<script>
+google.charts.load("current", { packages: ["corechart"] });
+google.charts.setOnLoadCallback(drawUserWorkload);
+
+function drawUserWorkload() {
+    const rawData = {{ workload_data | tojson }};
+    const data = google.visualization.arrayToDataTable(rawData);
+
+    const chart = new google.visualization.PieChart(
+        document.getElementById("user_workload_chart")
+    );
+
+    chart.draw(data, {
+        backgroundColor: "#fafafa",
+        pieHole: 0.45,
+        slices: {
+            0: { color: "#6b7280" },
+            1: { color: "#2563eb" },
+            2: { color: "#10b981" }
+        }
+    });
+}
+</script>
+
+{% endblock %}

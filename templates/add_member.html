@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2>Add Member to "{{ group.name }}"</h2>
+
+  {% if not form.user_id.choices %}
+    <p>No available users to add.</p>
+  {% else %}
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="form-row">
+        {{ form.user_id.label }}
+        {{ form.user_id() }}
+      </div>
+
+      <div class="form-row">
+        {{ form.role.label }}
+        {{ form.role() }}
+      </div>
+
+      <div class="form-row">
+        {{ form.submit(class_='btn') }}
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WORKPULSE</title>
+    <li><a href="{{ url_for('my_dashboard') }}">My Dashboard</a></li>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <!-- Loader spinner -->
+    <style>
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #ccc;
+            border-top-color: #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body class="{{ 'dark-mode' if session.get('theme') == 'dark' else '' }}">
+
+{% if current_user.is_authenticated %}
+<a href="{{ url_for('notifications') }}">
+    Notifications ({{ current_user.unread_notifications|length }})
+</a>
+{% endif %}
+
+<!-- Toast Container -->
+<div id="toast-container" style="
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 9999;">
+</div>
+
+<script>
+function showToast(message) {
+    const box = document.getElementById("toast-container");
+
+    const toast = document.createElement("div");
+    toast.textContent = message;
+
+    toast.style.background = "#333";
+    toast.style.color = "white";
+    toast.style.padding = "10px 15px";
+    toast.style.marginTop = "10px";
+    toast.style.borderRadius = "6px";
+    toast.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s ease";
+
+    box.appendChild(toast);
+
+    requestAnimationFrame(() => toast.style.opacity = "1");
+    setTimeout(() => toast.style.opacity = "0", 2500);
+    setTimeout(() => toast.remove(), 3000);
+}
+</script>
+
+{% if session.get('popup_notification') %}
+<script>
+    showToast("{{ session.get('popup_notification') | e }}");
+</script>
+{% endif %}
+{% set _ = session.pop('popup_notification', None) %}
+
+
+
+
+<!-- NAVBAR -->
+<nav class="nav">
+    <div class="container">
+        <a class="brand" href="{{ url_for('index') }}">ProjManager</a>
+
+        <div class="nav-right">
+            {% if current_user.is_authenticated %}
+                <span>Hi, {{ current_user.username }}</span>
+
+                <!-- DARK MODE BUTTON -->
+                <button id="theme-toggle" class="btn" style="margin-left:10px;">
+                    🌙
+                </button>
+
+                <a href="{{ url_for('logout') }}">Logout</a>
+
+            {% else %}
+                <a href="{{ url_for('login') }}">Login</a>
+                <a href="{{ url_for('register') }}">Register</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+<!-- PAGE LOADER -->
+<div id="page-loader" style="
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255,255,255,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;">
+    <div class="loader"></div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <ul class="flashes">
+            {% for category, msg in messages %}
+            <li class="flash {{ category }}">{{ msg }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    {% endwith %}
+    
+    {% block content %}{% endblock %}
+</main>
+
+<!-- SOCKET.IO -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+// -----------------------------
+// GLOBAL SOCKET
+// -----------------------------
+const socket = io({
+    transports: ["websocket", "polling"]
+});
+
+{% if current_user.is_authenticated %}
+const CURRENT_USER_ID = Number("{{ current_user.id }}");
+
+// When socket connects, mark user online
+socket.on("connect", () => {
+    socket.emit("join", { user_id: CURRENT_USER_ID });
+    console.log("Socket connected + JOIN sent:", CURRENT_USER_ID);
+});
+{% endif %}
+
+
+// -----------------------------
+// GLOBAL NOTIFICATIONS
+// -----------------------------
+socket.on("new_notification", data => {
+    if (!data) return;
+    if (Number(data.user_id) === CURRENT_USER_ID) {
+        showToast(data.message);
+
+        if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Project Manager", { body: data.message });
+        }
+    }
+});
+
+
+// -----------------------------
+// DEADLINE REMINDERS
+// -----------------------------
+{% if current_user.is_authenticated %}
+async function checkDeadlines() {
+    try {
+        const resp = await fetch("{{ url_for('deadline_reminders') }}");
+        if (!resp.ok) return;
+
+        const tasks = await resp.json();
+        if (!Array.isArray(tasks)) return;
+
+        tasks.forEach(t => {
+            const msg = `Task "${t.title}" is due ${t.due_human}.`;
+            showToast(msg);
+
+            if ("Notification" in window &&
+                Notification.permission === "granted") {
+                new Notification("Task Reminder", { body: msg });
+            }
+        });
+
+    } catch (err) {
+        console.error("Deadline reminder error:", err);
+    }
+}
+checkDeadlines();
+{% endif %}
+
+
+// -----------------------------
+// PAGE LOADER
+// -----------------------------
+const loader = document.getElementById("page-loader");
+
+// window.addEventListener("beforeunload", () => {
+//     loader.style.opacity = "1";
+//     loader.style.pointerEvents = "auto";
+// });
+
+// Disable loader for download links
+document.addEventListener("click", (ev) => {
+    const el = ev.target.closest("a");
+    if (!el) return;
+
+    if (el.classList.contains("no-loader")) {
+        window.skipPageLoader = true;
+    }
+});
+
+// Page loader logic
+window.addEventListener("beforeunload", (ev) => {
+    if (window.skipPageLoader) return;
+
+    loader.style.opacity = "1";
+    loader.style.pointerEvents = "auto";
+});
+
+
+
+window.addEventListener("load", () => {
+    loader.style.opacity = "0";
+    loader.style.pointerEvents = "none";
+});
+
+document.addEventListener("submit", () => {
+    loader.style.opacity = "1";
+    loader.style.pointerEvents = "auto";
+});
+
+
+// -----------------------------
+// DARK MODE
+// -----------------------------
+const body = document.body;
+const toggle = document.getElementById("theme-toggle");
+
+const savedTheme = localStorage.getItem("theme");
+if (savedTheme === "dark") {
+    body.classList.add("dark-mode");
+    toggle.textContent = "☀️";
+}
+
+toggle?.addEventListener("click", () => {
+    const dark = body.classList.toggle("dark-mode");
+    toggle.textContent = dark ? "☀️" : "🌙";
+    localStorage.setItem("theme", dark ? "dark" : "light");
+});
+
+
+// -------------------------------------------------
+// 🔥 UNIVERSAL GROUP ROOM AUTO-JOIN (Pomodoro Fix)
+// -------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+    const groupElem = document.getElementById("group-id");
+    if (groupElem) {
+        const gid = Number(groupElem.dataset.group);
+        console.log("Joining group room:", gid);
+        socket.emit("join_room", { group_id: gid });
+    }
+});
+</script>
+
+</body>
+</html>

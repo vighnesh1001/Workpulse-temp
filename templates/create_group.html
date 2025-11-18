@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="auth-card">
+  <h2>Create Group</h2>
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="form-row">
+      {{ form.name.label }}
+      {{ form.name(size=32) }}
+      {% for err in form.name.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+    </div>
+    <div class="form-row">
+      {{ form.description.label }}
+      {{ form.description(size=64) }}
+    </div>
+    <div class="form-row">
+      {{ form.submit(class_='btn') }}
+    </div>
+  </form>
+</div>
+{% endblock %}

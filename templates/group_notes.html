@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="card">
+  <h2>Shared Notes — {{ group.name }}</h2>
+  <p class="muted">
+    Live collaborative note for this group. Everyone here sees edits in real time.
+  </p>
+
+  <div style="display:flex; gap:16px; margin-top:16px; flex-wrap:wrap;">
+
+    <!-- Editor area -->
+    <div style="flex:2; min-width:260px;">
+      <label for="group-note-text" style="font-weight:bold;">Group Note</label>
+      <textarea id="group-note-text"
+                style="width:100%; min-height:260px; margin-top:6px; padding:10px; font-family:monospace; font-size:14px;">{{ note.content }}</textarea>
+      <small id="note-status" class="muted">All changes saved.</small>
+    </div>
+
+    <!-- Presence / info sidebar (optional) -->
+    <div style="flex:1; min-width:220px;">
+      <h4>Tips</h4>
+      <ul class="muted" style="font-size:14px; padding-left:18px;">
+        <li>Edits sync instantly to all group members on this page.</li>
+        <li>Last write wins – it’s simple, not Google Docs level CRDT.</li>
+        <li>Use it for meeting notes, decisions, checklists, etc.</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  .muted { color:#666; }
+  #group-note-text {
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      resize: vertical;
+  }
+  #group-note-text:focus {
+      outline: none;
+      border-color: #3498db;
+      box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
+  }
+</style>
+
+<script>
+// --- Real-time notes sync ---
+
+(function () {
+    const textarea = document.getElementById("group-note-text");
+    const statusEl = document.getElementById("note-status");
+    const groupId = {{ group.id }};
+    const currentUserId = (typeof CURRENT_USER_ID !== "undefined") ? Number(CURRENT_USER_ID) : null;
+
+    // Use global socket from base.html
+    const notesSocket = (typeof socket !== "undefined") ? socket : io();
+
+    // Join this group's room so we receive notes_update
+    notesSocket.emit("join_room", { group_id: groupId });
+
+    let isLocalEdit = false;
+    let saveTimeout = null;
+
+    function setStatus(text) {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+    }
+
+    // Debounce helper
+    function debounce(fn, delay) {
+        let timer = null;
+        return function (...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    const sendUpdate = debounce(function () {
+        if (!textarea) return;
+        const content = textarea.value;
+        setStatus("Saving…");
+
+        notesSocket.emit("notes_update", {
+            group_id: groupId,
+            content: content
+        });
+
+        // We'll switch to "saved" once server broadcasts back to others.
+        // For the local user we can just optimistically show it:
+        setTimeout(() => setStatus("All changes saved."), 400);
+    }, 300);
+
+    if (textarea) {
+        textarea.addEventListener("input", () => {
+            isLocalEdit = true;
+            setStatus("Editing…");
+            sendUpdate();
+        });
+    }
+
+    // Listen for updates from other users
+    notesSocket.on("notes_update", data => {
+        if (!data || Number(data.group_id) !== Number(groupId)) return;
+
+        // If this update came from us, we already have the content
+        if (currentUserId && Number(data.user_id) === currentUserId) {
+            return;
+        }
+
+        if (!textarea) return;
+
+        const cursorPos = textarea.selectionStart;
+        const scrollTop = textarea.scrollTop;
+
+        textarea.value = data.content;
+        setStatus(`Updated by ${data.username || 'someone else'}`);
+
+        // try to preserve scroll/cursor
+        textarea.selectionStart = textarea.selectionEnd = cursorPos;
+        textarea.scrollTop = scrollTop;
+    });
+
+})();
+</script>
+
+{% endblock %}

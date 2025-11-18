@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+  <!-- Left column: Groups list -->
+  <div style="flex:1;min-width:300px;">
+    <div class="card">
+      <h2>My Groups</h2>
+      {% if groups %}
+      <ul style="padding-left:16px;">
+        {% for group in groups %}
+          <li style="margin-bottom:10px;">
+            <strong><a href="{{ url_for('group_detail', group_id=group.id) }}">{{ group.name }}</a></strong>
+            <div class="muted" style="font-size:0.95rem;">{{ group.description or 'No description' }}</div>
+            <div style="margin-top:6px;font-size:0.9rem;color:#4a5568;">
+              Admin: {{ group.admin.username }}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <p>You are not part of any groups yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Right column: Create group -->
+  <div style="width:360px;">
+    <div class="auth-card">
+      <h3>Create Group</h3>
+      <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <div class="form-row">
+          {{ form.name.label }}
+          {{ form.name(placeholder='Team name') }}
+          {% for err in form.name.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+        </div>
+
+        <div class="form-row">
+          {{ form.description.label }}
+          {{ form.description(placeholder='Short description (optional)') }}
+        </div>
+
+        <div class="form-row">
+          {{ form.submit(class_='btn') }}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- in <head> of your base.html add -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+
+<!-- where you want the calendar (dashboard template) -->
+
+
+<!-- after your other scripts (before </body>) -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const calendarEl = document.getElementById('task-calendar');
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay'
+    },
+    height: 650,
+    navLinks: true,
+    nowIndicator: true,
+    eventDisplay: 'block',
+    events: {
+      url: '{{ url_for("task_events") }}',
+      method: 'GET',
+      failure: function() {
+        alert('There was an error while fetching events.');
+      }
+    },
+    eventClick: function(info) {
+      // allow link to open in same tab
+      if (info.event.url) {
+        window.location.href = info.event.url;
+        info.jsEvent.preventDefault();
+      }
+    },
+    eventDidMount: function(info) {
+      // simple tooltip with title + due date if available
+      let el = info.el;
+      el.setAttribute('title', info.event.title);
+    },
+    loading: function(isLoading) {
+      // optionally show a loading indicator
+      // document.getElementById('loading-indicator').style.display = isLoading ? 'block' : 'none';
+    },
+    dayMaxEvents: true,
+    now: new Date().toISOString()
+  });
+
+  calendar.render();
+});
+</script>
+
+<<!-- Calendar Section (full width below the columns) -->
+<div class="card" style="margin-top:20px;">
+  <h2>Task Calendar</h2>
+  <p class="muted">This calendar shows your tasks, due dates, and updates.</p>
+  <div id="calendar"></div>
+</div>
+
+<!-- FullCalendar inside the same block -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log("Calendar script loaded");  // Debug
+
+  const calendarEl = document.getElementById('calendar');
+  if (!calendarEl) {
+    console.log("Calendar element NOT FOUND");
+    return;
+  }
+
+  console.log("Calendar element found, rendering...");
+
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    height: 'auto',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+    },
+    events: '/api/tasks/events',
+    eventColor: '#2b6cb0',
+    eventTextColor: 'white',
+    eventClick: function(info) {
+      const groupId = info.event.extendedProps.group_id;
+      const taskId = info.event.id;
+      window.location.href = `/groups/${groupId}/tasks/${taskId}`;
+    }
+  });
+
+  calendar.render();
+});
+</script>
+
+
+{% endblock %}

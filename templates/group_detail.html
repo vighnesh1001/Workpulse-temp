@@ -1,0 +1,1081 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-dag@0.6"></script>
+
+<style>
+  .kanban-container {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .kanban-column {
+    width: 32%;
+    background: #f7f7f7;
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .kanban-list {
+    background: #ffffff;
+    min-height: 200px;
+    padding: 10px;
+    border-radius: 6px;
+  }
+
+  .kanban-card {
+    background: #e9ecef;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    cursor: grab;
+  }
+
+  /* Online/Offline dots */
+  .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+  }
+  .online { background: #2ecc71; }
+  .offline { background: #e74c3c; }
+</style>
+
+
+<div class="card">
+  <h2>{{ group.name }}</h2>
+  <p class="muted">{{ group.description or 'No description' }}</p>
+
+  <h3>Members</h3>
+  <ul>
+    {% for m in members %}
+      {% set is_online = m.id in online_users %}
+      <li data-user-id="{{ m.id }}">
+        <span class="status-dot {{ 'online' if is_online else 'offline' }}"></span>
+
+        {{ m.username }}
+
+        {% set membership = m.memberships 
+          |selectattr('group_id','equalto',group.id)
+          |list 
+          |first %}
+        <span class="muted">({{ membership.role }})</span>
+
+        <small class="muted status-text">
+          — {{ 'Online' if is_online else 'Offline' }}
+        </small>
+      </li>
+    {% endfor %}
+  </ul>
+
+  {% if current_user.id == group.admin_id %}
+    <a href="{{ url_for('add_member', group_id=group.id) }}" class="btn">Add Member</a>
+  {% endif %}
+</div>
+
+
+<div class="card" style="margin-top:20px;">
+  <h3>Group Messages</h3>
+  <a href="{{ url_for('group_messages', group_id=group.id) }}" class="btn">Open Chat</a>
+</div>
+
+
+{% if current_user.id == group.admin_id %}
+<div class="card" style="margin-top:20px;">
+  <h3>Admin Task Overview</h3>
+
+  <h4>Pending Tasks</h4>
+  {% if pending_tasks %}
+    <ul style="padding-left:16px;">
+      {% for task in pending_tasks %}
+        <li>
+          <a href="{{ url_for('task_detail', group_id=group.id, task_id=task.id) }}">
+            {{ task.title }}
+          </a>
+          — {{ task.status }}
+          {% if task.due_date %}
+            <br><small>Due: {{ task.due_date.strftime('%Y-%m-%d') }}</small>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No pending tasks 🎉</p>
+  {% endif %}
+
+  <!-- Kanban Board -->
+  <h3 style="margin-top:25px;">Kanban Board</h3>
+
+  <div class="kanban-container">
+
+    <!-- To Do -->
+    <div class="kanban-column">
+      <h3>To Do</h3>
+      <div id="todo" class="kanban-list">
+        {% for t in todo_tasks %}
+        <div class="kanban-card"
+             data-id="{{ t.id }}"
+             data-status="{{ t.status }}">
+          <strong>{{ t.title }}</strong><br>
+          <small>Priority: {{ t.priority }}</small>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- In Progress -->
+    <div class="kanban-column">
+      <h3>In Progress</h3>
+      <div id="inprogress" class="kanban-list">
+        {% for t in inprogress_tasks %}
+        <div class="kanban-card"
+             data-id="{{ t.id }}"
+             data-status="{{ t.status }}">
+          <strong>{{ t.title }}</strong><br>
+          <small>Priority: {{ t.priority }}</small>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Done -->
+    <div class="kanban-column">
+      <h3>Done</h3>
+      <div id="done" class="kanban-list">
+        {% for t in done_tasks %}
+        <div class="kanban-card"
+             data-id="{{ t.id }}"
+             data-status="{{ t.status }}">
+          <strong>{{ t.title }}</strong><br>
+          <small>Priority: {{ t.priority }}</small>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  function setupColumn(columnId, newStatus) {
+    const column = document.getElementById(columnId);
+
+    new Sortable(column, {
+      group: "kanban",
+      animation: 180,
+
+      onAdd: function (evt) {
+        evt.item.dataset.status = newStatus;
+      },
+
+      onChoose: function () {
+        column.classList.add("drag-over");
+      },
+      onUnchoose: function () {
+        column.classList.remove("drag-over");
+      },
+
+      onEnd: function (evt) {
+        column.classList.remove("drag-over");
+        const card = evt.item;
+        const taskId = card.dataset.id;
+
+        fetch("/task/update_status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: taskId,
+            status: newStatus,
+          }),
+        });
+      },
+    });
+  }
+
+  setupColumn('todo', 'todo');
+  setupColumn('inprogress', 'in-progress');
+  setupColumn('done', 'done');
+  </script>
+
+
+  <h4 style="margin-top:15px;">Overdue Tasks</h4>
+  {% if overdue_tasks %}
+    <ul style="padding-left:16px;">
+      {% for task in overdue_tasks %}
+        <li style="color: #c0392b;">
+          <a href="{{ url_for('task_detail', group_id=group.id, task_id=task.id) }}" style="color:#c0392b;">
+            {{ task.title }}
+          </a>
+          — {{ task.status }}
+          <br><small>Due was: {{ task.due_date.strftime('%Y-%m-%d') }}</small>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No overdue tasks 👏</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<p>ToDo count: {{ todo_tasks|length }}</p>
+<p>InProgress count: {{ inprogress_tasks|length }}</p>
+<p>Done count: {{ done_tasks|length }}</p>
+
+
+<div class="card" style="margin-top:20px;">
+  <h3>Tasks</h3>
+  <a href="{{ url_for('create_task', group_id=group.id) }}" class="btn">Create Task</a>
+
+  {% if group.tasks %}
+    <ul style="padding-left:16px;">
+      {% for task in group.tasks %}
+        <li style="margin-bottom:10px;">
+          <strong>
+            <a href="{{ url_for('task_detail', group_id=group.id, task_id=task.id) }}">
+              {{ task.title }}
+            </a>
+          </strong>
+          — {{ task.status }}
+          <br>
+          <small>Created by {{ task.creator.username }}</small>
+
+          {% if task.assigned_to %}
+            <br><small>Assigned to {{ task.assignee.username }}</small>
+          {% endif %}
+
+          {% if task.due_date %}
+            <br><small>Due: {{ task.due_date.strftime('%Y-%m-%d') }}</small>
+          {% else %}
+            <br><small>Due: No deadline</small>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No tasks yet.</p>
+  {% endif %}
+</div>
+
+<!-- ---------- TASK DEPENDENCY GRAPH (ZOOMABLE + SCROLLABLE) ----------
+<div class="card" style="margin-top:20px;">
+  <h3>Task Dependency Graph</h3>
+  <p class="muted">Shows how tasks depend on each other. Scroll, zoom, drag freely.</p>
+
+  <div id="dependency-graph-wrapper"
+       style="width:100%; height:420px; overflow:auto; border:1px solid #ddd; border-radius:8px; position:relative;">
+      <svg id="dependency-graph" width="1500" height="1200" style="background:#fafafa;"></svg>
+  </div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function () {
+
+    const tasks = [
+        {% for t in group.tasks %}
+        {
+            id: {{ t.id }},
+            title: "{{ t.title|replace('"','') }}",
+            status: "{{ t.status }}",
+            depends_on: {% if t.dependency_id %} {{ t.dependency_id }} {% else %} null {% endif %}
+        },
+        {% endfor %}
+    ];
+
+    const nodes = tasks.map(t => ({
+        id: t.id,
+        name: t.title,
+        status: t.status
+    }));
+
+    const links = tasks
+        .filter(t => t.depends_on)
+        .map(t => ({
+            source: t.depends_on,
+            target: t.id
+        }));
+
+    const svg = d3.select("#dependency-graph");
+    const g = svg.append("g");
+
+    const zoom = d3.zoom()
+        .scaleExtent([0.2, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    svg.call(zoom);
+
+    const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links)
+            .id(d => d.id)
+            .distance(160))
+        .force("charge", d3.forceManyBody().strength(-600))
+        .force("center", d3.forceCenter(750, 600));
+
+    const color = (status) => {
+        if (status === "done") return "#2ecc71";
+        if (status === "in-progress") return "#f1c40f";
+        return "#95a5a6";
+    };
+
+    svg.append("defs").append("marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 25)
+        .attr("markerWidth", 8)
+        .attr("markerHeight", 8)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#777");
+
+    const link = g.append("g")
+        .selectAll("line")
+        .data(links)
+        .enter()
+        .append("line")
+        .attr("stroke", "#777")
+        .attr("stroke-width", 2)
+        .attr("marker-end", "url(#arrow)");
+
+    const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .enter()
+        .append("g")
+        .call(d3.drag()
+            .on("start", dragStart)
+            .on("drag", dragged)
+            .on("end", dragEnd));
+
+    node.append("circle")
+        .attr("r", 26)
+        .attr("fill", d => color(d.status))
+        .attr("stroke", "#333")
+        .attr("stroke-width", 1.4);
+
+    node.append("text")
+        .text(d => d.name)
+        .attr("x", -20)
+        .attr("y", 5)
+        .style("font-size", "10px");
+
+    simulation.on("tick", () => {
+        link.attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+
+        node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+
+    function dragStart(event) {
+        if (!event.active) simulation.alphaTarget(0.4).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+    }
+    function dragged(event) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+    }
+    function dragEnd(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+    }
+
+})();
+</script> -->
+
+<!-- =================== GOOGLE GANTT CHART =================== -->
+<div class="card" style="margin-top:20px;">
+  <h3>Project Timeline (Gantt Chart)</h3>
+  <p class="muted">Visual timeline of tasks in this group.</p>
+  <div id="gantt_chart" style="width:100%; height:500px;"></div>
+</div>
+
+<script src="https://www.gstatic.com/charts/loader.js"></script>
+<script>
+google.charts.load('current', { packages: ['gantt'] });
+google.charts.setOnLoadCallback(drawGanttChart);
+
+function drawGanttChart() {
+    var data = new google.visualization.DataTable();
+
+    data.addColumn('string', 'Task ID');
+    data.addColumn('string', 'Task Name');
+    data.addColumn('string', 'Resource');      // we'll use status here
+    data.addColumn('date',   'Start Date');
+    data.addColumn('date',   'End Date');
+    data.addColumn('number', 'Duration');
+    data.addColumn('number', 'Percent Complete');
+    data.addColumn('string', 'Dependencies');
+
+    var rows = [
+        {% for t in group.tasks %}
+        [
+            '{{ t.id }}',
+            '{{ t.title|replace("'", "\\'") }}',
+            '{{ t.status }}',
+
+            {% if t.created_at %}
+              new Date({{ t.created_at.year }}, {{ t.created_at.month-1 }}, {{ t.created_at.day }}),
+            {% else %}
+              null,
+            {% endif %}
+
+            {% if t.due_date %}
+              new Date({{ t.due_date.year }}, {{ t.due_date.month-1 }}, {{ t.due_date.day }}),
+            {% else %}
+              null,
+            {% endif %}
+
+            null,
+
+            {% if t.status == 'done' %}
+              100,
+            {% elif t.status == 'in-progress' %}
+              50,
+            {% else %}
+              0,
+            {% endif %}
+
+            {% if t.dependency_id %}
+              '{{ t.dependency_id }}'
+            {% else %}
+              null
+            {% endif %}
+        ]{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    data.addRows(rows);
+
+    var height = 40 * data.getNumberOfRows() + 100;
+    if (height < 300) height = 300;
+
+    var options = {
+        height: height,
+        backgroundColor: '#fafafa',
+        gantt: {
+            trackHeight: 32,
+            barCornerRadius: 4,
+            criticalPathEnabled: false,
+            labelStyle: {
+                fontName: 'Inter, system-ui, sans-serif',
+                fontSize: 11,
+                color: '#111'
+            },
+            innerGridLine: {
+                stroke: '#e5e7eb',
+                strokeWidth: 1
+            },
+            palette: [
+                { color: '#6b7280', dark: '#374151', light: '#e5e7eb' }, // grey
+                { color: '#3b82f6', dark: '#1d4ed8', light: '#dbeafe' }, // blue
+                { color: '#10b981', dark: '#047857', light: '#d1fae5' }, // green
+                { color: '#f97316', dark: '#ea580c', light: '#ffedd5' }  // orange
+            ]
+        }
+    };
+
+    var chart = new google.visualization.Gantt(
+        document.getElementById('gantt_chart')
+    );
+    chart.draw(data, options);
+}
+</script>
+
+<!-- GROUP HEATMAPS -->
+<div class="card" style="margin-top:20px;">
+  <h3>Group Heatmaps</h3>
+
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+    <div>
+      <button id="heatmap-type-activity" class="btn btn-sm">Activity</button>
+      <button id="heatmap-type-deadline" class="btn btn-sm">Deadline</button>
+      <button id="heatmap-type-both" class="btn btn-sm">Both (combined)</button>
+    </div>
+
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+      <label style="font-size:13px; color:#666;">Months:</label>
+      <select id="heatmap-months" style="padding:4px;">
+        <option value="3">3</option>
+        <option value="6">6</option>
+        <option value="12" selected>12</option>
+      </select>
+    </div>
+  </div>
+  <a href="{{ url_for('export_report', group_id=group.id) }}"
+   class="btn no-loader">
+   📄 Export Project Report (PDF)
+</a>
+
+<!-- Auto Assign Quick UI (place inside the group view; shown to admin only) -->
+{% if current_user.id == group.admin_id %}
+<div class="card p-3 my-3" id="auto-assign-card">
+  <h5>Quick Auto-Assign</h5>
+  <p class="small text-muted">Type a short task description and press Enter. The app will determine the role and assign to the member of that role with the fewest open tasks.</p>
+
+  <form id="auto-assign-form" class="d-flex" onsubmit="return false;">
+    <input id="aa-text" class="form-control mr-2" placeholder="Describe the task (e.g. Fix login bug in API)" />
+    <button id="aa-submit" class="btn btn-primary ml-2">Assign</button>
+  </form>
+  <div id="aa-result" class="mt-2"></div>
+</div>
+
+<script>
+document.getElementById('aa-submit').addEventListener('click', async function () {
+  const text = document.getElementById('aa-text').value.trim();
+  const resultDiv = document.getElementById('aa-result');
+  resultDiv.innerHTML = '';
+  if (!text) { resultDiv.innerHTML = '<span class="text-warning">Enter a task description.</span>'; return; }
+
+  // Optional: show loader
+  resultDiv.innerHTML = '<span class="text-muted">Assigning…</span>';
+
+  try {
+    const resp = await fetch("{{ url_for('auto_assign_quick', group_id=group.id) }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // if you use CSRF tokens, include header here:
+        // 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+      },
+      body: JSON.stringify({ text })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      resultDiv.innerHTML = `<div class="alert alert-success p-2">Assigned to <strong>${data.assigned_to}</strong> (role: ${data.role}). <a href="{{ url_for('group_detail', group_id=group.id) }}">Refresh</a></div>`;
+      document.getElementById('aa-text').value = '';
+    } else {
+      resultDiv.innerHTML = `<div class="alert alert-danger p-2">${data.error || JSON.stringify(data)}</div>`;
+    }
+  } catch (err) {
+    resultDiv.innerHTML = `<div class="alert alert-danger p-2">Request failed: ${err}</div>`;
+  }
+});
+</script>
+{% endif %}
+
+
+
+  <div id="group-heatmap-container" style="display:flex; gap:12px; overflow-x:auto; padding-bottom:8px;"></div>
+
+  <div style="margin-top:12px; display:flex; gap:18px;">
+    <div id="mini-calendar" style="min-width:220px;"></div>
+    <div style="flex:1;">
+      <p class="muted">Legend: left = activity, right = deadlines (when both shown). Hover tiles for details.</p>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP FILES -->
+<div class="card" style="margin-top:20px;">
+  <h3>Group Files</h3>
+
+  <form action="{{ url_for('group_files', group_id=group.id) }}" method="post" enctype="multipart/form-data" style="display:flex; gap:8px; align-items:center;">
+    <input type="file" name="file" required>
+    <button type="submit" class="btn">Upload</button>
+    <small class="muted">Allowed: png,jpg,pdf,txt,zip,docx,csv. Max: {{ (config.MAX_CONTENT_LENGTH // (1024*1024)) if config.get('MAX_CONTENT_LENGTH') else 50 }} MB</small>
+  </form>
+
+  <div style="margin-top:12px;">
+    {% if files %}
+      <ul style="padding-left:16px;">
+        {% for f in files %}
+          <li style="margin-bottom:8px;">
+            <a href="{{ url_for('download_group_file', group_id=group.id, file_id=f.id) }}">
+              {{ f.original_filename }}
+            </a>
+            &nbsp;<small class="muted">— uploaded by {{ f.uploader.username }} on {{ f.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            {% if f.filesize %}
+              &nbsp;<small class="muted">({{ (f.filesize/1024)|round(1) }} KB)</small>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No files uploaded yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Heatmap tooltip + styles -->
+<div id="heatmap-tooltip" style="
+    position: absolute; display:none; z-index:2000;
+    background:#222; color:#fff; padding:6px 8px; border-radius:4px; font-size:12px;"></div>
+
+<style>
+.g-heat-tile {
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  margin: 2px;
+  display: inline-block;
+  vertical-align: middle;
+  border: 1px solid rgba(0,0,0,0.05);
+  cursor:default;
+}
+.g-month {
+  background: #fafafa;
+  padding: 8px;
+  border-radius:6px;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  min-width: 160px;
+}
+.g-month h5 { margin:0 0 6px 0; font-size:13px; }
+.mini-cal { background:#fff; border-radius:6px; padding:8px; box-shadow:0 1px 0 rgba(0,0,0,0.04); }
+.mini-cal .day { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; margin:2px; border-radius:4px; font-size:12px; }
+</style>
+
+<script>
+(function () {
+  const container = document.getElementById("group-heatmap-container");
+  const tooltip = document.getElementById("heatmap-tooltip");
+  const grpId = {{ group.id }};
+  let currentType = "both";
+  let months = Number(document.getElementById("heatmap-months").value || 12);
+
+  function colorForActivity(n) {
+    if (n <= 0) return "#eee";
+    if (n === 1) return "#b2dfdb";
+    if (n === 2) return "#4dd0e1";
+    if (n === 3) return "#26c6da";
+    return "#00acc1";
+  }
+  function colorForDeadline(n) {
+    if (n <= 0) return "#eee";
+    if (n === 1) return "#ffd54f";
+    if (n === 2) return "#ffb74d";
+    if (n === 3) return "#ff8a65";
+    return "#ff5252";
+  }
+
+  async function fetchHeatmap() {
+    const url = `/api/group-heatmap?group_id=${grpId}&type=both&months=${months}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.error("Heatmap fetch failed", r.status);
+      return {};
+    }
+    const data = await r.json();
+    return data;
+  }
+
+  function renderSmallMonth(year, month, dateMap) {
+    const monthStart = new Date(year, month, 1);
+    const monthName = monthStart.toLocaleString(undefined, { month: "short" });
+    const days = new Date(year, month + 1, 0).getDate();
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "g-month";
+    wrapper.style.minWidth = "140px";
+
+    const title = document.createElement("h5");
+    title.textContent = `${monthName} ${year}`;
+    wrapper.appendChild(title);
+
+    const row = document.createElement("div");
+    for (let d = 1; d <= days; d++) {
+      const key = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const info = dateMap[key] || {activity:0, deadline:0};
+
+      const act = info.activity || 0;
+      const dead = info.deadline || 0;
+
+      const tile = document.createElement("div");
+      tile.className = "g-heat-tile";
+
+      if (act > 0 && dead > 0) {
+        const total = act + dead;
+        const pct = Math.round((act/total) * 100);
+        const aColor = colorForActivity(act);
+        const dColor = colorForDeadline(dead);
+        tile.style.background = `linear-gradient(90deg, ${aColor} ${pct}%, ${dColor} ${pct}%)`;
+      } else if (act > 0) {
+        tile.style.background = colorForActivity(act);
+      } else if (dead > 0) {
+        tile.style.background = colorForDeadline(dead);
+      } else {
+        tile.style.background = "#f3f3f3";
+      }
+
+      tile.dataset.key = key;
+      tile.dataset.act = act;
+      tile.dataset.dead = dead;
+
+      tile.addEventListener("mouseenter", (e) => {
+        const k = tile.dataset.key;
+        const a = Number(tile.dataset.act);
+        const d2 = Number(tile.dataset.dead);
+        tooltip.style.display = "block";
+        tooltip.innerHTML = `${k} — Activity: ${a}, Deadlines: ${d2}`;
+      });
+      tile.addEventListener("mousemove", (e) => {
+        tooltip.style.left = (e.pageX + 12) + "px";
+        tooltip.style.top = (e.pageY + 12) + "px";
+      });
+      tile.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+
+      row.appendChild(tile);
+    }
+
+    wrapper.appendChild(row);
+    return wrapper;
+  }
+
+  async function renderHeatmapAll() {
+    container.innerHTML = "";
+    const map = await fetchHeatmap();
+
+    const today = new Date();
+    const monthsList = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      monthsList.push({y: d.getFullYear(), m: d.getMonth()});
+    }
+
+    monthsList.forEach(({y,m}) => {
+      const monthEl = renderSmallMonth(y, m, map);
+      container.appendChild(monthEl);
+    });
+
+    renderMiniCalendar(map);
+  }
+
+  function renderMiniCalendar(dateMap) {
+    const mini = document.getElementById("mini-calendar");
+    mini.innerHTML = "";
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const firstDow = new Date(y,m,1).getDay();
+    const days = new Date(y, m+1, 0).getDate();
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "mini-cal";
+
+    const header = document.createElement("div");
+    header.style.fontSize = "13px";
+    header.style.marginBottom = "6px";
+    header.textContent = now.toLocaleString(undefined, { month: "long", year: "numeric" });
+    wrapper.appendChild(header);
+
+    const labels = document.createElement("div");
+    labels.style.display = "flex";
+    labels.style.gap = "4px";
+    labels.style.marginBottom = "6px";
+    const shortWeek = ["S","M","T","W","T","F","S"];
+    shortWeek.forEach(l => {
+      const el = document.createElement("div");
+      el.style.width = "28px"; el.style.fontSize = "11px"; el.style.textAlign = "center";
+      el.textContent = l;
+      labels.appendChild(el);
+    });
+    wrapper.appendChild(labels);
+
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexWrap = "wrap";
+    grid.style.width = "220px";
+    for (let i = 0; i < firstDow; i++){
+      const blank = document.createElement("div");
+      blank.className = "day";
+      blank.style.width = "28px"; blank.style.height = "28px";
+      blank.style.visibility = "hidden";
+      grid.appendChild(blank);
+    }
+    for (let d = 1; d <= days; d++) {
+      const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const info = dateMap[key] || {activity:0, deadline:0};
+      const act = info.activity || 0;
+      const dead = info.deadline || 0;
+
+      const el = document.createElement("div");
+      el.className = "day";
+      el.style.width = "28px"; el.style.height = "28px"; el.style.display="inline-flex";
+      el.style.alignItems="center"; el.style.justifyContent="center"; el.style.fontSize="12px";
+      el.style.margin = "2px";
+
+      if (dead > 0) el.style.background = colorForDeadline(dead);
+      else if (act > 0) el.style.background = colorForActivity(act);
+      else el.style.background = "#fff";
+
+      el.textContent = d;
+      el.title = `${key} — Activity: ${act} / Deadlines: ${dead}`;
+      grid.appendChild(el);
+    }
+    wrapper.appendChild(grid);
+    mini.appendChild(wrapper);
+  }
+
+  document.getElementById("heatmap-type-activity").addEventListener("click", () => {
+    currentType = "activity";
+    renderHeatmapAll();
+  });
+  document.getElementById("heatmap-type-deadline").addEventListener("click", () => {
+    currentType = "deadline";
+    renderHeatmapAll();
+  });
+  document.getElementById("heatmap-type-both").addEventListener("click", () => {
+    currentType = "both";
+    renderHeatmapAll();
+  });
+  document.getElementById("heatmap-months").addEventListener("change", (e) => {
+    months = Number(e.target.value);
+    renderHeatmapAll();
+  });
+
+  renderHeatmapAll();
+
+})();
+</script>
+<div class="card" style="margin-top:20px;">
+    <h3>Assignee Workload</h3>
+    <p class="muted">How many tasks each member is responsible for in this group.</p>
+
+    <div id="workload_chart" style="width:100%; height:350px;"></div>
+</div>
+<div class="card" style="margin-top:20px;">
+  <h3>Sprint Progress</h3>
+
+  <p style="margin-bottom:6px; color:#555;">
+    {{ sprint_progress }}% complete
+  </p>
+
+  <div style="
+      width: 100%;
+      background: #e5e7eb;
+      height: 18px;
+      border-radius: 10px;
+      overflow:hidden;
+      position:relative;
+  ">
+    <div style="
+        width: {{ sprint_progress }}%;
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+        border-radius: 10px;
+        transition: width 0.25s ease;
+    "></div>
+  </div>
+</div>
+
+
+
+<div class="card" style="margin-top:20px;">
+  <h3>Group Announcements</h3>
+  <p class="muted">Pinned messages for everyone in this group.</p>
+
+  <!-- Post form (any member can post, if you want only admin, check current_user.id == group.admin_id) -->
+  <form method="POST" action="{{ url_for('post_announcement', group_id=group.id) }}"
+        style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+
+      <input type="text" name="message" placeholder="Write an announcement..."
+             class="form-control" style="flex:1; padding:6px;" required>
+
+      <button class="btn">Post</button>
+  </form>
+
+  {% if announcements %}
+    <ul style="padding-left:16px;">
+      {% for a in announcements %}
+        <li style="margin-bottom:8px;">
+          <strong>{{ a.author.username }}</strong>
+          <small class="muted">
+            — {{ a.created_at.strftime("%Y-%m-%d %H:%M") }}
+          </small>
+          <br>
+          {{ a.message }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No announcements yet.</p>
+  {% endif %}
+</div>
+
+
+
+<!-- REALTIME ONLINE/OFFLINE TRACKING -->
+<script>
+  window.addEventListener("load", function () {
+      if (typeof socket === "undefined") {
+          console.error("Socket not available on group_detail page");
+          return;
+      }
+
+      socket.on("presence_update", data => {
+          const li = document.querySelector(`li[data-user-id="${data.user_id}"]`);
+          if (!li) return;
+
+          const dot = li.querySelector(".status-dot");
+          const text = li.querySelector(".status-text");
+
+          if (data.online) {
+              dot.classList.remove("offline");
+              dot.classList.add("online");
+              text.textContent = " — Online";
+          } else {
+              dot.classList.remove("online");
+              dot.classList.add("offline");
+              text.textContent = " — Offline";
+          }
+      });
+
+      {% if current_user.is_authenticated %}
+      socket.emit("join", { user_id: {{ current_user.id }} });
+      {% endif %}
+  });
+</script>
+
+
+<!-- the user chart -->
+<!-- Google Charts Loader -->
+<script src="https://www.gstatic.com/charts/loader.js"></script>
+<script>
+google.charts.load("current", {
+    packages: ["gantt", "corechart"]  // LOAD BOTH TOGETHER 🟢
+});
+
+// register both chart callbacks
+google.charts.setOnLoadCallback(drawGanttChart);
+google.charts.setOnLoadCallback(drawWorkloadChart);
+
+/* ------------------------- GANTT CHART ---------------------------- */
+function drawGanttChart() {
+    const data = new google.visualization.DataTable();
+
+    data.addColumn("string", "Task ID");
+    data.addColumn("string", "Task Name");
+    data.addColumn("date", "Start Date");
+    data.addColumn("date", "End Date");
+    data.addColumn("number", "Duration");
+    data.addColumn("number", "Percent Complete");
+    data.addColumn("string", "Dependencies");
+
+    const rows = [
+        {% for t in group.tasks %}
+        [
+            "{{ t.id }}",
+            "{{ t.title }}",
+            new Date("{{ t.created_at.strftime('%Y-%m-%d') }}"),
+            {% if t.due_date %}
+                new Date("{{ t.due_date.strftime('%Y-%m-%d') }}"),
+            {% else %}
+                new Date("{{ t.created_plus2 }}"),
+            {% endif %}
+            null,
+            {% if t.status == 'done' %}
+                100,
+            {% elif t.status == 'in-progress' %}
+                50,
+            {% else %}
+                0,
+            {% endif %}
+            null
+        ],
+        {% endfor %}
+    ];
+
+    data.addRows(rows);
+
+    const options = {
+        height: 500,
+        backgroundColor: "#fafafa",
+        gantt: {
+            trackHeight: 32,
+            barCornerRadius: 6,
+            criticalPathEnabled: false,
+            labelStyle: {
+                fontName: "Roboto",
+                fontSize: 12,
+                color: "#111"
+            },
+            palette: [
+                { color: "#3b82f6", dark: "#2563eb" },  // Blue
+                { color: "#10b981", dark: "#059669" },  // Green
+                { color: "#ef4444", dark: "#dc2626" }   // Red
+            ]
+        }
+    };
+
+    const chart = new google.visualization.Gantt(
+        document.getElementById("gantt_chart")
+    );
+    chart.draw(data, options);
+}
+
+/* ---------------------- WORKLOAD CHART -------------------------- */
+function drawWorkloadChart() {
+    const rawData = {{ workload_data | tojson }};
+    const data = google.visualization.arrayToDataTable(rawData);
+
+    const options = {
+        backgroundColor: "#fafafa",
+        legend: { position: "none" },
+        bar: { groupWidth: "60%" },
+        colors: ["#2563eb"],
+        chartArea: { width: "70%", height: "70%" },
+        hAxis: { title: "Number of Tasks", minValue: 0 },
+    };
+
+    const chart = new google.visualization.BarChart(
+        document.getElementById("workload_chart")
+    );
+    chart.draw(data, options);
+}
+</script>
+<script>
+
+<script>
+document.addEventListener("keydown", function (e) {
+
+    // Ignore shortcuts while typing in an input or textarea
+    const active = document.activeElement.tagName.toLowerCase();
+    if (active === "input" || active === "textarea") return;
+
+ 
+</script>
+<script>
+document.getElementById("autoAssignBtn").onclick = async function () {
+    const input = document.getElementById("autoAssignText");
+    const loader = document.getElementById("autoAssignLoader");
+    const result = document.getElementById("autoAssignResult");
+
+    const text = input.value.trim();
+    if (!text) return;
+
+    loader.style.display = "inline-block";
+    result.innerHTML = "";
+
+    try {
+        const response = await fetch(`/groups/{{ group.id }}/auto_assign_quick`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text })
+        });
+
+        const data = await response.json();  // <-- IMPORTANT
+
+        loader.style.display = "none";       // <-- hide loader
+
+        if (data.success) {
+            result.innerHTML = `Assigned to <b>${data.assigned_to}</b> (${data.role})`;
+            input.value = "";
+        } else {
+            result.innerHTML = `<span style="color:red">${data.error}</span>`;
+        }
+    } catch (err) {
+        loader.style.display = "none";        // <-- hide on error
+        result.innerHTML = "<span style='color:red'>Server error.</span>";
+        console.error(err);
+    }
+};
+</script>
+
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="auth-card">
+    <h2>Register</h2>
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="form-row">
+        {{ form.username.label }}
+        {{ form.username(placeholder='Choose a username') }}
+        {% for err in form.username.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        {{ form.email.label }}
+        {{ form.email(placeholder='you@example.com') }}
+        {% for err in form.email.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        {{ form.password.label }}
+        {{ form.password(placeholder='Password') }}
+        {% for err in form.password.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        {{ form.confirm.label }}
+        {{ form.confirm(placeholder='Confirm password') }}
+        {% for err in form.confirm.errors %}<div class="field-error">{{ err }}</div>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        {{ form.submit(class_='btn') }}
+      </div>
+    </form>
+    <p class="muted">Already registered? <a href="{{ url_for('login') }}">Login</a></p>
+  </div>
+{% endblock %}

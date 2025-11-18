@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card">
+  <h2>My Groups</h2>
+  <a href="{{ url_for('create_group') }}" class="btn">Create New Group</a>
+  <ul>
+    {% for group in groups %}
+      <li>
+        <strong>{{ group.name }}</strong>
+        <br>
+        {{ group.description or 'No description' }}
+      </li>
+    {% else %}
+      <li>You are not part of any groups yet.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
